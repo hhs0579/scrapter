@@ -1,0 +1,22 @@
+{
+  "name": "scrapter-hosting",
+  "version": "1.0.0",
+  "description": "Build and deploy scripts for Scrapter",
+  "scripts": {
+    "clean": "rm -rf dist && mkdir -p dist/app",
+    "build": "npm run clean && npm run build:vue && npm run build:flutter",
+    "build:vue": "cd ../scrapter-vue && npm run build",
+    "build:flutter": "cd ../scrapter-flutter && flutter build web --base-href /app/ --release",
+    "copy:vue": "cp -r ../scrapter-vue/dist/* dist/ 2>/dev/null || xcopy /E /I /Y ..\\scrapter-vue\\dist\\* dist\\",
+    "copy:flutter": "cp -r ../scrapter-flutter/build/web/* dist/app/ 2>/dev/null || xcopy /E /I /Y ..\\scrapter-flutter\\build\\web\\* dist\\app\\",
+    "prepare": "npm run clean",
+    "preview": "npm run build && npm run copy:vue && npm run copy:flutter && npm run serve",
+    "serve": "firebase emulators:start --only hosting",
+    "serve:local": "cd dist && python3 -m http.server 8000 || python -m SimpleHTTPServer 8000",
+    "deploy": "npm run build && npm run copy:vue && npm run copy:flutter && firebase deploy --only hosting"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.0.0"
+  }
+}
+
