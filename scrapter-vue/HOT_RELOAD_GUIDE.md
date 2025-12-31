@@ -58,3 +58,4 @@ npm run preview
 2. **배포 전 테스트**: `npm run build && npm run preview` 사용
 3. **실제 배포**: `hosting` 폴더에서 빌드 및 배포
 
+
