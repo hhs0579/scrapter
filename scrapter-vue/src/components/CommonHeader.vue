@@ -37,6 +37,7 @@
       <div class="nav-content">
         <router-link to="/" class="nav-item">홈</router-link>
         <router-link to="/user-guide" class="nav-item">사용가이드</router-link>
+        <router-link to="/dashboard" class="nav-item">대시보드</router-link>
       </div>
     </div>
     <div class="header-nav-mobile" v-else>
@@ -51,6 +52,9 @@
           <router-link to="/user-guide" class="nav-item" @click="closeMenu"
             >사용가이드</router-link
           >
+          <router-link to="/dashboard" class="nav-item" @click="closeMenu"
+            >대시보드</router-link
+          >
         </div>
       </div>
     </div>
@@ -60,8 +64,24 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { useThemeStore } from "../stores/theme";
+
+// Firebase 동적 import (선택적)
+let auth: any = null;
+let onAuthStateChanged: any = null;
+
+import("../config/firebase")
+  .then((firebaseModule) => {
+    if (firebaseModule.auth) {
+      auth = firebaseModule.auth;
+      import("firebase/auth").then((authModule) => {
+        onAuthStateChanged = authModule.onAuthStateChanged;
+      });
+    }
+  })
+  .catch((error) => {
+    console.warn("Firebase 모듈을 로드할 수 없습니다:", error);
+  });
 
 const router = useRouter();
 const themeStore = useThemeStore();
@@ -97,10 +117,15 @@ const handleLanguage = () => {
   // 언어 변경 기능
 };
 
-const goToUser = () => {
-  if (isLoggedIn.value) {
-    router.push("/mypage");
-  } else {
+const goToUser = async () => {
+  // 현재 로그인 상태를 다시 확인
+  try {
+    if (auth && auth.currentUser) {
+      router.push("/dashboard");
+    } else {
+      router.push("/login");
+    }
+  } catch (error) {
     router.push("/login");
   }
 };
@@ -158,13 +183,26 @@ const handleResize = () => {
 
 onMounted(() => {
   window.addEventListener("resize", handleResize);
+
+  // Firebase Auth 상태 확인 (선택적)
   try {
-    const auth = getAuth();
-    onAuthStateChanged(auth, (user) => {
-      isLoggedIn.value = !!user;
-    });
+    if (auth && onAuthStateChanged) {
+      // 초기 상태 확인
+      if (auth.currentUser) {
+        isLoggedIn.value = true;
+      }
+
+      // 상태 변경 리스너
+      onAuthStateChanged(auth, (user: any) => {
+        isLoggedIn.value = !!user;
+      });
+    } else {
+      // Firebase가 초기화되지 않은 경우
+      isLoggedIn.value = false;
+    }
   } catch (e) {
     // Firebase가 초기화되지 않은 경우
+    console.warn("Firebase Auth를 사용할 수 없습니다:", e);
     isLoggedIn.value = false;
   }
 });
@@ -186,7 +224,7 @@ onUnmounted(() => {
 
 .header-content {
   margin: 0 auto;
-  padding: 0 10%;
+  padding: 0 20%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -200,14 +238,18 @@ onUnmounted(() => {
 
 .logo-image {
   height: 40px;
+  width: auto;
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
-  image-rendering: auto;
-  -ms-interpolation-mode: nearest-neighbor;
+  image-rendering: high-quality;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  will-change: auto;
+  filter: contrast(1.05) brightness(1.02);
 }
 
 .header-actions {
@@ -256,7 +298,7 @@ onUnmounted(() => {
 
 .nav-content {
   margin: 0 auto;
-  padding: 0 10%;
+  padding: 0 20%;
   display: flex;
   gap: 32px;
 }

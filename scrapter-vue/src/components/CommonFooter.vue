@@ -3,7 +3,7 @@
     <div class="footer-content">
       <div class="footer-left">
         <img
-          src="/logo2.png"
+          :src="logo3Src"
           alt="Scrapter"
           class="footer-logo"
           @error="handleLogoError"
@@ -34,6 +34,7 @@
 
 <script setup lang="ts">
 import { useRouter } from "vue-router";
+import logo3Src from "../assets/logo3.png";
 
 const router = useRouter();
 
@@ -61,7 +62,7 @@ const goToFaq = () => {
 
 <style scoped>
 .common-footer {
-  background-color: #9e9e9e;
+  background-color: var(--primary-color, #ff7700);
   padding: 80px 10%;
   color: white;
 }
@@ -81,15 +82,19 @@ const goToFaq = () => {
 
 .footer-logo {
   height: 40px;
+  width: auto;
   object-fit: contain;
   transition: opacity 0.3s;
   image-rendering: -webkit-optimize-contrast;
   image-rendering: crisp-edges;
-  image-rendering: auto;
-  -ms-interpolation-mode: nearest-neighbor;
+  image-rendering: high-quality;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transform: translateZ(0);
   backface-visibility: hidden;
   -webkit-backface-visibility: hidden;
+  will-change: auto;
+  filter: contrast(1.05) brightness(1.02);
 }
 
 .footer-text {

@@ -145,3 +145,5 @@ cp scrapter-flutter/assets/fonts/Pretendard-*.otf scrapter-vue/src/assets/fonts/
 `pubspec.yaml`에 이미 Pretendard 폰트가 등록되어 있습니다.
 
 
+
+

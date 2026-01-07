@@ -63,11 +63,73 @@ npm run preview
 - ✅ Vue Router를 통한 라우팅
 - ✅ Pinia를 통한 상태 관리
 
+## Firebase 연결하기
+
+### 1단계: Firebase 프로젝트 생성
+
+1. [Firebase 콘솔](https://console.firebase.google.com)에 접속
+2. "프로젝트 추가" 클릭
+3. 프로젝트 이름 입력 후 생성
+
+### 2단계: 웹 앱 등록
+
+1. Firebase 프로젝트 대시보드에서 웹 아이콘(</>) 클릭
+2. 앱 닉네임 입력 (예: "scrapter-vue")
+3. "앱 등록" 클릭
+4. Firebase SDK 설정 값 복사 (또는 나중에 프로젝트 설정에서 확인)
+
+### 3단계: 환경 변수 설정
+
+프로젝트 루트에 `.env` 파일을 생성하고 다음 내용을 추가하세요:
+
+```env
+VITE_FIREBASE_API_KEY=your-api-key-here
+VITE_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your-messaging-sender-id
+VITE_FIREBASE_APP_ID=your-app-id
+VITE_FIREBASE_MEASUREMENT_ID=your-measurement-id
+```
+
+**설정 값 찾는 방법:**
+- Firebase 콘솔 > 프로젝트 설정 (톱니바퀴 아이콘) > 일반 탭
+- "내 앱" 섹션에서 웹 앱 선택
+- "SDK 설정 및 구성" 섹션에서 `firebaseConfig` 객체의 값들을 복사
+
+### 4단계: Firebase 서비스 활성화
+
+필요한 Firebase 서비스를 콘솔에서 활성화하세요:
+
+- **Authentication**: 사용자 인증 (이메일/비밀번호, Google 등)
+- **Firestore Database**: NoSQL 데이터베이스
+- **Storage**: 파일 저장소
+
+### 5단계: 사용하기
+
+Firebase가 이미 설정되어 있으므로, 다른 컴포넌트에서 다음과 같이 사용할 수 있습니다:
+
+```typescript
+import { auth, db, storage } from '@/config/firebase';
+
+// 인증 예시
+import { signInWithEmailAndPassword } from 'firebase/auth';
+await signInWithEmailAndPassword(auth, email, password);
+
+// Firestore 예시
+import { collection, addDoc } from 'firebase/firestore';
+await addDoc(collection(db, 'users'), { name: 'John' });
+
+// Storage 예시
+import { ref, uploadBytes } from 'firebase/storage';
+const storageRef = ref(storage, 'images/photo.jpg');
+await uploadBytes(storageRef, file);
+```
+
 ## 다음 단계
 
-Flutter 프로젝트와 동일한 기능을 구현하기 위해 다음 기능들을 추가할 수 있습니다:
-
-- Firebase 인증 설정
+- ✅ Firebase 설정 완료
+- Firebase 인증 구현
 - Firestore 데이터베이스 연동
 - 이미지 업로드 및 스토리지 연동
 - Google Sign-In 통합

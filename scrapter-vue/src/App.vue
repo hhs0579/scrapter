@@ -3,16 +3,24 @@ import { RouterView } from "vue-router";
 </script>
 
 <template>
-  <RouterView />
+  <div>
+    <RouterView />
+  </div>
 </template>
 
 <style>
 :root {
   --bg-color: #ffffff;
   --text-color: #213547;
+  --text-strong: #111827;
+  --muted-text: #666666;
+  --subtle-text: #999999;
   --header-bg: #f9f9f9;
   --primary-color: #ff7700;
   --secondary-bg: #f1f1f1;
+  --surface-bg: #ffffff;
+  --surface-muted-bg: #fbfbfb;
+  --primary-soft-bg: #fff5f0;
   --border-color: #e0e0e0;
   --hover-bg: #e8e8e8;
 }
@@ -20,9 +28,15 @@ import { RouterView } from "vue-router";
 .dark {
   --bg-color: #1a1a1a;
   --text-color: #ffffff;
+  --text-strong: #ffffff;
+  --muted-text: #bdbdbd;
+  --subtle-text: #8a8a8a;
   --header-bg: #2d2d2d;
   --primary-color: #ff7700;
   --secondary-bg: #2d2d2d;
+  --surface-bg: #2d2d2d;
+  --surface-muted-bg: #242424;
+  --primary-soft-bg: rgba(255, 119, 0, 0.14);
   --border-color: #404040;
   --hover-bg: #3d3d3d;
 }
@@ -80,6 +94,28 @@ body {
   100% {
     transform: translate(-50%, -50%) scale(1);
     opacity: 0;
+  }
+}
+
+/* Page enter animation (Landing 같은 부드러운 전환) */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fade-up 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    animation: none !important;
   }
 }
 </style>
