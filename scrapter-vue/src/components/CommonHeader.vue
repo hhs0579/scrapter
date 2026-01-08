@@ -224,7 +224,7 @@ onUnmounted(() => {
 
 .header-content {
   margin: 0 auto;
-  padding: 0 20%;
+  padding: 0 10%;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -250,12 +250,14 @@ onUnmounted(() => {
   -webkit-backface-visibility: hidden;
   will-change: auto;
   filter: contrast(1.05) brightness(1.02);
+  transition: height 0.3s ease;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
   gap: 24px;
+  flex-wrap: nowrap;
 }
 
 .contact-button {
@@ -288,6 +290,7 @@ onUnmounted(() => {
 
 .icon-button .material-icons {
   font-size: 24px;
+  transition: font-size 0.3s ease;
 }
 
 .header-nav {
@@ -298,7 +301,7 @@ onUnmounted(() => {
 
 .nav-content {
   margin: 0 auto;
-  padding: 0 20%;
+  padding: 0 10%;
   display: flex;
   gap: 32px;
 }
@@ -343,11 +346,111 @@ onUnmounted(() => {
 
 @media (max-width: 800px) {
   .header-content {
-    padding: 0 5%;
+    padding: 0 4%;
+    gap: 12px;
+  }
+
+  .header-top {
+    padding: 16px 0;
+  }
+
+  .logo-image {
+    height: 32px;
+  }
+
+  .header-actions {
+    gap: 12px;
+  }
+
+  .contact-button {
+    padding: 8px 12px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .icon-button {
+    padding: 6px;
+  }
+
+  .icon-button .material-icons {
+    font-size: 20px;
   }
 
   .nav-content {
-    padding: 0 5%;
+    padding: 0 4%;
+  }
+}
+
+@media (max-width: 480px) {
+  .header-content {
+    padding: 0 3%;
+    gap: 8px;
+  }
+
+  .header-top {
+    padding: 12px 0;
+  }
+
+  .logo-image {
+    height: 28px;
+    min-width: 100px;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .contact-button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .icon-button {
+    padding: 4px;
+    min-width: 32px;
+  }
+
+  .icon-button .material-icons {
+    font-size: 18px;
+  }
+
+  .nav-content {
+    padding: 0 3%;
+  }
+
+  .nav-item {
+    font-size: 14px;
+    padding: 0 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .header-content {
+    padding: 0 2%;
+    gap: 6px;
+  }
+
+  .logo-image {
+    height: 24px;
+    min-width: 80px;
+  }
+
+  .contact-button {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .header-actions {
+    gap: 4px;
+  }
+
+  .icon-button {
+    padding: 3px;
+    min-width: 28px;
+  }
+
+  .icon-button .material-icons {
+    font-size: 16px;
   }
 }
 </style>

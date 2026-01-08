@@ -224,12 +224,19 @@ const handleSignUp = async () => {
 
     // Firestore에 사용자 정보 저장
     if (db) {
-      await setDoc(doc(db, "users", userUid), {
+      const userData: any = {
         email: formData.value.email,
         nickname: formData.value.nickname,
         createdAt: new Date(),
         signUpMethod: isGoogleSignUp.value ? "google" : "email",
-      });
+      };
+
+      // Google 로그인인 경우 프로필 이미지 URL 저장
+      if (isGoogleSignUp.value && auth.currentUser?.photoURL) {
+        userData.photoURL = auth.currentUser.photoURL;
+      }
+
+      await setDoc(doc(db, "users", userUid), userData);
     }
 
     // 회원가입 성공 시 메인 페이지로 이동

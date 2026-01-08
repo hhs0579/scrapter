@@ -7,40 +7,72 @@
         <aside class="dashboard-sidebar">
           <div class="user-info">
             <div class="user-avatar">
-              <span class="material-icons">person</span>
+              <img
+                v-if="userPhotoURL"
+                :src="userPhotoURL"
+                :alt="userNickname"
+                class="avatar-image"
+              />
+              <span v-else class="material-icons">person</span>
             </div>
             <p class="greeting-text">안녕하세요</p>
-            <p class="user-name">{{ userNickname }} 님</p>
+            <p class="user-name">
+              <span class="user-name-text">{{ userNickname }}</span>
+              <span class="user-name-suffix"> 님</span>
+            </p>
           </div>
 
           <button class="new-manuscript-button" @click="goToApp">
             새 원고 만들기
           </button>
 
-          <router-link to="/" class="back-to-main">메인페이지로 돌아가기</router-link>
+          <router-link to="/" class="back-to-main"
+            >메인페이지로 돌아가기</router-link
+          >
 
           <nav class="sidebar-nav">
             <router-link to="/dashboard" class="nav-item" active-class="active">
               <span class="material-icons">home</span>
               <span>대시보드</span>
             </router-link>
-            <router-link to="/dashboard/manuscripts" class="nav-item" active-class="active">
+            <router-link
+              to="/dashboard/manuscripts"
+              class="nav-item"
+              active-class="active"
+            >
               <span class="material-icons">description</span>
               <span>나의 원고함</span>
             </router-link>
-            <router-link to="/dashboard/records" class="nav-item" active-class="active">
+            <router-link
+              to="/dashboard/records"
+              class="nav-item"
+              active-class="active"
+            >
               <span class="material-icons">history</span>
               <span>기록</span>
             </router-link>
-            <router-link to="/dashboard/inquiries" class="nav-item" active-class="active">
+            <router-link
+              to="/dashboard/inquiries"
+              class="nav-item"
+              active-class="active"
+            >
               <span class="material-icons">chat_bubble_outline</span>
               <span>문의사항</span>
             </router-link>
-            <router-link to="/dashboard/settings" class="nav-item" active-class="active">
+            <router-link
+              to="/dashboard/settings"
+              class="nav-item"
+              active-class="active"
+            >
               <span class="material-icons">settings</span>
               <span>설정</span>
             </router-link>
           </nav>
+
+          <button class="logout-button" @click="handleLogout">
+            <span class="material-icons">logout</span>
+            <span>로그아웃</span>
+          </button>
         </aside>
 
         <!-- 오른쪽 메인 콘텐츠 -->
@@ -85,22 +117,26 @@
                         : "원고 생성 중"
                     }}
                   </span>
-                  <span
-                    v-if="manuscript.validUntil"
-                    class="validity-period"
-                  >
+                  <span v-if="manuscript.validUntil" class="validity-period">
                     유효기간: {{ formatDate(manuscript.validUntil) }}
                   </span>
                 </div>
               </div>
               <div class="manuscript-actions">
-                <button
-                  v-if="!manuscript.isExpired"
-                  class="view-button"
-                  @click="viewManuscript(manuscript.id)"
-                >
-                  보기
-                </button>
+                <template v-if="!manuscript.isExpired">
+                  <button
+                    class="view-button"
+                    @click="viewManuscript(manuscript.id)"
+                  >
+                    보기
+                  </button>
+                  <button
+                    class="edit-button"
+                    @click="editManuscript(manuscript.id)"
+                  >
+                    수정하기
+                  </button>
+                </template>
                 <button v-else class="expired-button" disabled>
                   기간 만료
                 </button>
@@ -115,10 +151,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { auth, db } from "../config/firebase";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { signOut } from "firebase/auth";
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  doc,
+  getDoc,
+} from "firebase/firestore";
 import CommonHeader from "../components/CommonHeader.vue";
 import CommonFooter from "../components/CommonFooter.vue";
 
@@ -137,6 +181,7 @@ const router = useRouter();
 const manuscripts = ref<Manuscript[]>([]);
 const isLoading = ref(false);
 const userNickname = ref<string>("");
+const userPhotoURL = ref<string>("");
 
 onMounted(async () => {
   // 로그인 확인
@@ -153,11 +198,19 @@ const loadUserInfo = async () => {
   if (!auth?.currentUser || !db) return;
 
   try {
+    // Firebase Auth에서 프로필 이미지 가져오기
+    userPhotoURL.value = auth.currentUser.photoURL || "";
+
     const userDocRef = doc(db, "users", auth.currentUser.uid);
     const userDoc = await getDoc(userDocRef);
     if (userDoc.exists()) {
       const userData = userDoc.data();
-      userNickname.value = userData.nickname || "사용자";
+      userNickname.value =
+        userData.nickname || auth.currentUser.displayName || "사용자";
+      // Firestore에 이미지 URL이 저장되어 있으면 사용 (Google 로그인 시 photoURL이 있을 수 있음)
+      if (userData.photoURL && !userPhotoURL.value) {
+        userPhotoURL.value = userData.photoURL;
+      }
     } else {
       userNickname.value = auth.currentUser.displayName || "사용자";
     }
@@ -179,8 +232,7 @@ const loadManuscripts = async () => {
     const manuscriptsRef = collection(db, "manuscripts");
     const q = query(
       manuscriptsRef,
-      where("userId", "==", auth.currentUser.uid),
-      orderBy("createdAt", "desc")
+      where("userId", "==", auth.currentUser.uid)
     );
     const querySnapshot = await getDocs(q);
 
@@ -203,8 +255,13 @@ const loadManuscripts = async () => {
       };
     });
 
+    // 클라이언트 측에서 날짜순 정렬 (최신순)
+    manuscripts.value.sort((a, b) => {
+      return b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
     // 가장 최근 원고를 하이라이트
-    if (manuscripts.value.length > 0) {
+    if (manuscripts.value.length > 0 && manuscripts.value[0]) {
       manuscripts.value[0].isHighlighted = true;
     }
   } catch (error) {
@@ -227,7 +284,31 @@ const goToApp = () => {
 };
 
 const viewManuscript = (id: string) => {
-  router.push(`/manuscript?id=${id}`);
+  // 세션 스토리지에 ID 저장 (URL에 노출되지 않음)
+  sessionStorage.setItem("viewingManuscriptId", id);
+  sessionStorage.removeItem("editingManuscriptId");
+  router.push("/manuscript");
+};
+
+const editManuscript = (id: string) => {
+  // 세션 스토리지에 ID 저장 (URL에 노출되지 않음)
+  sessionStorage.setItem("editingManuscriptId", id);
+  sessionStorage.removeItem("viewingManuscriptId");
+  router.push("/manuscript");
+};
+
+const handleLogout = async () => {
+  if (!auth) return;
+
+  try {
+    await signOut(auth);
+    // 세션 스토리지 초기화
+    sessionStorage.clear();
+    router.push("/");
+  } catch (error) {
+    console.error("로그아웃 오류:", error);
+    alert("로그아웃 중 오류가 발생했습니다.");
+  }
 };
 </script>
 
@@ -236,8 +317,11 @@ const viewManuscript = (id: string) => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-color);
+  background-color: transparent;
   color: var(--text-color);
+  transition: color 0.6s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-content {
@@ -247,9 +331,9 @@ const viewManuscript = (id: string) => {
 
 .dashboard-layout {
   display: flex;
-  max-width: 1400px;
+
   margin: 0 auto;
-  padding: 0 40px;
+  padding: 0 10%;
   gap: 40px;
 }
 
@@ -259,6 +343,9 @@ const viewManuscript = (id: string) => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  height: fit-content;
+  position: sticky;
+  top: 120px;
 }
 
 .user-info {
@@ -280,11 +367,20 @@ const viewManuscript = (id: string) => {
   align-items: center;
   justify-content: center;
   margin-bottom: 12px;
+  overflow: hidden;
+  border: 2px solid var(--border-color);
 }
 
 .user-avatar .material-icons {
   font-size: 32px;
   color: var(--primary-color);
+}
+
+.user-avatar .avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .greeting-text {
@@ -296,8 +392,15 @@ const viewManuscript = (id: string) => {
 .user-name {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-strong);
   margin: 0;
+}
+
+.user-name-text {
+  color: #ff7700;
+}
+
+.user-name-suffix {
+  color: var(--text-strong);
 }
 
 .new-manuscript-button {
@@ -320,8 +423,9 @@ const viewManuscript = (id: string) => {
 .back-to-main {
   color: var(--muted-text);
   text-decoration: none;
+  font-weight: bold;
   font-size: 14px;
-  text-align: center;
+  text-align: left;
   padding: 8px;
   transition: color 0.2s;
 }
@@ -359,6 +463,34 @@ const viewManuscript = (id: string) => {
 }
 
 .sidebar-nav .nav-item .material-icons {
+  font-size: 20px;
+}
+
+.logout-button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  color: var(--text-color);
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: auto;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.logout-button:hover {
+  background-color: rgba(231, 76, 60, 0.1);
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.logout-button .material-icons {
   font-size: 20px;
 }
 
@@ -481,6 +613,8 @@ const viewManuscript = (id: string) => {
 .manuscript-actions {
   flex-shrink: 0;
   margin-left: 24px;
+  display: flex;
+  gap: 8px;
 }
 
 .view-button {
@@ -499,6 +633,22 @@ const viewManuscript = (id: string) => {
   background-color: #e88d4f;
 }
 
+.edit-button {
+  padding: 10px 20px;
+  background-color: var(--surface-bg);
+  color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-button:hover {
+  background-color: var(--primary-soft-bg);
+}
+
 .expired-button {
   padding: 10px 20px;
   background-color: var(--border-color);
@@ -511,4 +661,3 @@ const viewManuscript = (id: string) => {
   opacity: 0.6;
 }
 </style>
-
