@@ -100,9 +100,11 @@ const generateManuscript = async () => {
   generationError.value = "";
 
   try {
+    const extractedText = questionStore.getUploadedDocumentText();
     const manuscript = await generateCompanyIntroduction(
       answers,
-      questionStore.selectedCard
+      questionStore.selectedCard,
+      extractedText
     );
     questionStore.setGeneratedManuscript(manuscript);
   } catch (error) {

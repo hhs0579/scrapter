@@ -1,37 +1,133 @@
-const API_KEYS = ["AIzaSyD1m3qlQDJj2H-VedKJDwU6we6GelXwzLk"];
+import { db } from "../config/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
-const API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+// API 키 캐싱 (한 번만 읽어오기)
+let cachedApiKey: string | null = null;
 
-interface GenerateContentRequest {
+/**
+ * API 키 캐시를 초기화합니다 (새로운 API 키로 변경 시 사용)
+ */
+export function clearApiKeyCache(): void {
+  cachedApiKey = null;
+  console.log("🔄 API 키 캐시 초기화됨");
+}
+
+/**
+ * Gemini API 키를 가져옵니다.
+ * @param forceRefresh 캐시를 무시하고 새로 가져올지 여부
+ * @returns Gemini API 키 또는 빈 문자열
+ */
+async function getGeminiApiKey(forceRefresh: boolean = false): Promise<string> {
+  // 강제 새로고침이 아니고 캐시된 API 키가 있으면 반환
+  if (!forceRefresh && cachedApiKey) {
+    console.log("✅ 캐시된 API 키 사용");
+    return cachedApiKey;
+  }
+
+  try {
+    // 환경 변수에서 먼저 확인 (우선순위 1)
+    const envApiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (envApiKey && envApiKey.trim() !== "") {
+      console.log("✅ 환경 변수에서 API 키 사용");
+      cachedApiKey = envApiKey;
+      return envApiKey;
+    }
+
+    // 코드에 직접 설정된 API 키 확인 (우선순위 2 - 개발용)
+    // ⚠️ 주의: 프로덕션에서는 환경 변수 사용을 권장합니다
+    const directApiKey = "AIzaSyB8mkSz_j7gpv7_xYwANn5LLt6nMCeFAXc";
+    if (directApiKey && directApiKey.trim() !== "") {
+      console.log("✅ 코드에서 직접 설정된 API 키 사용");
+      console.log(
+        "🔑 API 키 (처음 10자):",
+        directApiKey.substring(0, 10) + "..."
+      );
+      cachedApiKey = directApiKey;
+      return directApiKey;
+    }
+
+    // Firestore에서 API 키 읽기 (우선순위 3 - 선택사항)
+    if (db) {
+      try {
+        console.log("📖 Firestore에서 API 키 읽기 시도...");
+        const configDocRef = doc(db, "config", "geminiApiKey");
+        const configDoc = await getDoc(configDocRef);
+
+        if (configDoc.exists()) {
+          const data = configDoc.data();
+          const apiKey = data?.key || data?.apiKey || "";
+
+          if (apiKey && apiKey.trim() !== "") {
+            cachedApiKey = apiKey;
+            console.log("✅ Firestore에서 API 키 가져오기 성공");
+            return apiKey;
+          }
+        }
+      } catch (firestoreError) {
+        console.warn(
+          "⚠️ Firestore에서 API 키 읽기 실패 (무시됨):",
+          firestoreError
+        );
+      }
+    }
+
+    // 모든 방법 실패
+    console.error("❌ API 키를 찾을 수 없습니다.");
+    return "";
+  } catch (error) {
+    console.error("❌ Gemini API 키 가져오기 오류:", error);
+    if (error instanceof Error) {
+      console.error("오류 메시지:", error.message);
+      console.error("오류 스택:", error.stack);
+    }
+    return "";
+  }
+}
+
+// Gemini API 엔드포인트 베이스 URL
+const API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+
+// 사용할 모델 (gemini-1.5-pro 또는 gemini-1.5-flash)
+const MODEL = "gemini-2.5-flash";
+
+interface GeminiGenerateContentRequest {
   contents: Array<{
     parts: Array<{
       text: string;
     }>;
   }>;
+  generationConfig?: {
+    temperature?: number;
+    maxOutputTokens?: number;
+  };
 }
 
-interface GenerateContentResponse {
+interface GeminiGenerateContentResponse {
   candidates?: Array<{
     content: {
       parts: Array<{
         text: string;
       }>;
     };
+    finishReason?: string;
+    finishMessage?: string;
   }>;
   error?: {
     message: string;
+    code?: number;
+    status?: string;
   };
 }
 
 // 카드별 프롬프트 생성 함수
 function getPromptForCard(
   cardNumber: number,
-  answers: Record<number, string>
+  answers: Record<number, string>,
+  extractedText?: string
 ): string {
   if (cardNumber === 1) {
     // 회사소개서 프롬프트
-    return `당신은 회사소개서 전문 카피라이터이자, 기업 문서 구조 설계에 특화된 콘텐츠 디렉터입니다.
+    const basePrompt = `당신은 회사소개서 전문 카피라이터이자, 기업 문서 구조 설계에 특화된 콘텐츠 디렉터입니다.
 아래에 제공되는 6개의 질문과 답변을 기반으로, 외부 이해관계자(투자자, 파트너, 고객 등)가 읽는 공식 회사소개서 원고를 작성하세요. 이 문서는 홍보용 글이 아니라, 회사의 맥락과 구조를 이해시키기 위한 설명 문서입니다.
 
 [중요한 출력 규칙]
@@ -82,13 +178,25 @@ ${answers[5] || ""}
 
 질문 6:
 ${answers[6] || ""}
+${
+  extractedText && extractedText.trim()
+    ? `
+
+[추가 참고 자료]
+사용자가 업로드한 문서 자료에서 추출한 정보가 아래에 포함되어 있습니다. 이 정보를 참고하여 원고를 보완하되, 질문과 답변의 내용과 일관성을 유지하세요. 업로드된 자료의 내용이 질문 답변과 충돌하거나 모순되는 경우, 질문 답변의 내용을 우선하세요.
+
+${extractedText}`
+    : ""
+}
 
 [출력 형식]
 
 출력 시 각 챕터는 반드시 번호와 제목으로 시작하고, 본문은 연속된 설명 흐름으로 작성하세요. 모든 챕터에 시각화 가이드가 포함되어야 하며, 전체 결과물은 하나의 완성된 회사소개서로 바로 활용할 수 있는 수준이어야 합니다.`;
+
+    return basePrompt;
   } else if (cardNumber === 2) {
     // IR / 사업계획서 프롬프트
-    return `당신은 IR 및 사업계획서 전문 카피라이터이자, 투자자 관점의 논리 구조를 설계하는 문서 디렉터입니다.
+    const basePrompt2 = `당신은 IR 및 사업계획서 전문 카피라이터이자, 투자자 관점의 논리 구조를 설계하는 문서 디렉터입니다.
 
 아래에 제공되는 6개의 질문과 답변을 기반으로, 투자자·외부 파트너·내부 의사결정자가 읽는 공식 IR / 사업계획서 원고를 작성하세요. 이 문서는 홍보 목적이 아니라, 사업의 구조와 판단 근거를 이해시키기 위한 설명 문서입니다.
 
@@ -141,13 +249,25 @@ ${answers[5] || ""}
 
 질문 6:
 ${answers[6] || ""}
+${
+  extractedText && extractedText.trim()
+    ? `
+
+[추가 참고 자료]
+사용자가 업로드한 문서 자료에서 추출한 정보가 아래에 포함되어 있습니다. 이 정보를 참고하여 원고를 보완하되, 질문과 답변의 내용과 일관성을 유지하세요. 업로드된 자료의 내용이 질문 답변과 충돌하거나 모순되는 경우, 질문 답변의 내용을 우선하세요.
+
+${extractedText}`
+    : ""
+}
 
 [출력 형식]
 
 출력 시 각 챕터는 반드시 번호와 제목으로 시작하고, 본문은 연속된 설명 흐름으로 작성하세요. 모든 챕터에 시각화 가이드가 포함되어야 하며, 전체 결과물은 투자 미팅, 내부 보고, 지원사업 제출용 문서로 바로 활용할 수 있는 수준이어야 합니다.`;
+
+    return basePrompt2;
   } else if (cardNumber === 3) {
     // 제품·서비스 소개서 프롬프트
-    return `당신은 제품·서비스 소개서 전문 카피라이터이며, 사용자의 관점에서 '무엇을 이해해야 이 제품이나 서비스를 선택할 수 있는지'를 구조화하는 문서 설계자입니다. 아래에 제공되는 6개의 질문과 답변을 기반으로, 제품 또는 서비스의 성격에 맞는 하나의 완성된 소개서 원고를 작성하세요.
+    const basePrompt3 = `당신은 제품·서비스 소개서 전문 카피라이터이며, 사용자의 관점에서 '무엇을 이해해야 이 제품이나 서비스를 선택할 수 있는지'를 구조화하는 문서 설계자입니다. 아래에 제공되는 6개의 질문과 답변을 기반으로, 제품 또는 서비스의 성격에 맞는 하나의 완성된 소개서 원고를 작성하세요.
 
 이 문서는 마케팅 문구나 광고용 카피가 아니라, 디자이너, 기획자, 파트너, 고객이 제품이나 서비스를 정확히 이해하기 위해 읽는 설명 문서입니다. 결과물은 기능을 나열하거나 장점을 강조하는 방식이 아니라, 사용 맥락과 구조를 중심으로 "왜 이 제품·서비스가 필요하고, 어떻게 쓰이며, 무엇이 기준이 되는지"가 자연스럽게 드러나야 합니다.
 
@@ -204,13 +324,25 @@ ${answers[5] || ""}
 
 질문 6:
 ${answers[6] || ""}
+${
+  extractedText && extractedText.trim()
+    ? `
+
+[추가 참고 자료]
+사용자가 업로드한 문서 자료에서 추출한 정보가 아래에 포함되어 있습니다. 이 정보를 참고하여 원고를 보완하되, 질문과 답변의 내용과 일관성을 유지하세요. 업로드된 자료의 내용이 질문 답변과 충돌하거나 모순되는 경우, 질문 답변의 내용을 우선하세요.
+
+${extractedText}`
+    : ""
+}
 
 [출력 형식]
 
 출력 시 각 챕터는 번호와 제목으로 시작하세요. 모든 챕터는 연속된 설명형 문단으로 구성되어야 하며, 전체 결과물은 상세페이지 이전 단계의 원고, 제안서, 소개 자료로 바로 활용할 수 있는 수준이어야 합니다.`;
+
+    return basePrompt3;
   } else if (cardNumber === 4) {
     // 상세페이지 원고 프롬프트
-    return `당신은 상세페이지 원고를 설계하는 콘텐츠 라이터입니다.
+    const basePrompt4 = `당신은 상세페이지 원고를 설계하는 콘텐츠 라이터입니다.
 
 아래에 제공되는 질문과 답변을 기반으로, **상세페이지에 바로 사용할 수 있는 글 원고**를 작성하세요.
 
@@ -309,6 +441,16 @@ ${answers[5] || ""}
 
 질문 6:
 ${answers[6] || ""}
+${
+  extractedText && extractedText.trim()
+    ? `
+
+[추가 참고 자료]
+사용자가 업로드한 문서 자료에서 추출한 정보가 아래에 포함되어 있습니다. 이 정보를 참고하여 원고를 보완하되, 질문과 답변의 내용과 일관성을 유지하세요. 업로드된 자료의 내용이 질문 답변과 충돌하거나 모순되는 경우, 질문 답변의 내용을 우선하세요.
+
+${extractedText}`
+    : ""
+}
 
 [결과물 기준]
 
@@ -317,6 +459,8 @@ ${answers[6] || ""}
 - 디자이너에게 바로 전달 가능한 상세페이지 원고이며
 - 쇼핑몰, 브랜드 사이트, 랜딩페이지에 그대로 사용할 수 있어야 하고
 - 수정 없이도 "글 구조가 이미 잡혀 있다"고 느껴지는 수준이어야 합니다.`;
+
+    return basePrompt4;
   } else {
     // 기본값 (카드 1과 동일 - 회사소개서)
     return `당신은 회사소개서 전문 카피라이터이자, 기업 문서 구조 설계에 특화된 콘텐츠 디렉터입니다.
@@ -379,61 +523,199 @@ ${answers[6] || ""}
 
 export async function generateCompanyIntroduction(
   answers: Record<number, string>,
-  cardNumber: number = 1
+  cardNumber: number = 1,
+  extractedText?: string,
+  retryCount: number = 0
 ): Promise<string> {
-  const prompt = getPromptForCard(cardNumber, answers);
+  const prompt = getPromptForCard(cardNumber, answers, extractedText);
 
-  const requestBody: GenerateContentRequest = {
+  // Gemini API 요청 형식
+  // system 메시지는 프롬프트에 포함
+  const fullPrompt = `당신은 전문적인 문서 작성 AI입니다. 사용자의 요구사항에 따라 정확하고 전문적인 문서를 작성합니다.
+
+⚠️ 중요: 반드시 모든 챕터(또는 섹션)를 완전히 작성해야 합니다. 중간에 끊기거나 미완성된 상태로 끝나면 안 됩니다. 문서의 처음부터 끝까지 완전한 형태로 작성해주세요.
+
+${prompt}
+
+⚠️ 마지막 확인: 위의 모든 챕터(또는 섹션)가 완전히 작성되었는지 확인하고, 미완성된 부분이 없도록 완전한 문서를 작성해주세요.`;
+
+  const requestBody: GeminiGenerateContentRequest = {
     contents: [
       {
         parts: [
           {
-            text: prompt,
+            text: fullPrompt,
           },
         ],
       },
     ],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 16384, // 긴 회사소개서를 위해 증가
+    },
   };
 
-  // API 키 순환 시도
-  for (const apiKey of API_KEYS) {
-    try {
-      const response = await fetch(`${API_URL}?key=${apiKey}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+  // Gemini API 키 가져오기 (재시도 시 캐시 무시)
+  const apiKey = await getGeminiApiKey(retryCount > 0);
 
-      if (!response.ok) {
-        const errorData = await response.json();
+  // API 키 확인
+  if (!apiKey || apiKey.trim() === "") {
+    throw new Error(
+      "Gemini API 키가 설정되지 않았습니다.\n\n" +
+        "Firestore의 'config/geminiApiKey' 문서에 API 키를 설정하거나,\n" +
+        ".env 파일에 VITE_GEMINI_API_KEY를 설정해주세요."
+    );
+  }
+
+  // 디버깅: 사용 중인 API 키 확인 (처음 10자만)
+  console.log(
+    "🔑 사용 중인 API 키:",
+    apiKey ? `${apiKey.substring(0, 10)}...` : "없음"
+  );
+
+  // API 호출 시도
+  try {
+    const apiUrl = `${API_BASE_URL}/${MODEL}:generateContent?key=${apiKey}`;
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const errorMessage =
+        errorData.error?.message || `API 요청 실패: ${response.status}`;
+
+      // 모델 접근 권한 오류 처리
+      if (
+        errorMessage.includes("not found") ||
+        errorMessage.includes("not available") ||
+        errorMessage.includes("permission denied")
+      ) {
         throw new Error(
-          errorData.error?.message || `API 요청 실패: ${response.status}`
+          `⚠️ 모델 접근 오류: ${errorMessage}\n\n` +
+            `현재 사용 중인 모델: ${MODEL}\n\n` +
+            `해결 방법:\n` +
+            `1. Google AI Studio에서 모델 접근 권한 확인\n` +
+            `2. API 키에 해당 모델 사용 권한이 있는지 확인\n` +
+            `3. 다른 모델(gemini-1.5-flash 등) 사용 시도`
         );
       }
 
-      const data: GenerateContentResponse = await response.json();
+      // 할당량 초과 오류 처리
+      if (
+        errorMessage.includes("quota") ||
+        errorMessage.includes("rate limit") ||
+        errorMessage.includes("RESOURCE_EXHAUSTED") ||
+        response.status === 429
+      ) {
+        let quotaErrorMessage =
+          "⚠️ Gemini API 할당량이 초과되었습니다.\n\n" +
+          "사용 한도에 도달했습니다.\n\n" +
+          "해결 방법:\n" +
+          "1. Google AI Studio (https://aistudio.google.com/app/apikey)에서:\n" +
+          "   - 사용량 확인\n" +
+          "   - 할당량 확인 및 업그레이드\n" +
+          "2. 잠시 후 다시 시도\n" +
+          "3. 다른 API 키 사용";
 
-      if (data.error) {
-        throw new Error(data.error.message);
+        throw new Error(quotaErrorMessage);
       }
 
-      if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-        return data.candidates[0].content.parts[0].text;
+      // API 키 관련 에러인 경우 명확한 메시지 제공
+      if (
+        errorMessage.includes("API key") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("authentication") ||
+        errorMessage.includes("UNAUTHENTICATED") ||
+        response.status === 401
+      ) {
+        // API 키 캐시 초기화 (잘못된 키일 수 있음)
+        cachedApiKey = null;
+        throw new Error(
+          `Gemini API 키 오류: ${errorMessage}\n\n` +
+            `API 키를 확인하고 다시 시도해주세요.`
+        );
       }
 
-      throw new Error("응답에서 원고를 찾을 수 없습니다.");
-    } catch (error) {
-      console.error(`API 키 ${apiKey}로 요청 실패:`, error);
-      // 마지막 API 키가 아니면 다음 키 시도
-      if (apiKey !== API_KEYS[API_KEYS.length - 1]) {
-        continue;
-      }
-      // 모든 API 키 실패 시 에러 throw
-      throw error;
+      throw new Error(errorMessage);
     }
-  }
 
-  throw new Error("모든 API 키로 요청이 실패했습니다.");
+    const data: GeminiGenerateContentResponse = await response.json();
+
+    if (data.error) {
+      const errorMessage = data.error.message;
+
+      // 할당량 초과 오류 처리
+      if (
+        errorMessage.includes("quota") ||
+        errorMessage.includes("rate limit") ||
+        errorMessage.includes("RESOURCE_EXHAUSTED")
+      ) {
+        let quotaErrorMessage =
+          "⚠️ Gemini API 할당량이 초과되었습니다.\n\n" +
+          "사용 한도에 도달했습니다.\n\n" +
+          "해결 방법:\n" +
+          "1. Google AI Studio (https://aistudio.google.com/app/apikey)에서:\n" +
+          "   - 사용량 확인\n" +
+          "   - 할당량 확인 및 업그레이드\n" +
+          "2. 잠시 후 다시 시도\n" +
+          "3. 다른 API 키 사용";
+
+        throw new Error(quotaErrorMessage);
+      }
+
+      // API 키 관련 에러인 경우 명확한 메시지 제공
+      if (
+        errorMessage.includes("API key") ||
+        errorMessage.includes("invalid") ||
+        errorMessage.includes("authentication") ||
+        errorMessage.includes("UNAUTHENTICATED")
+      ) {
+        // API 키 캐시 초기화 (잘못된 키일 수 있음)
+        cachedApiKey = null;
+        throw new Error(
+          `Gemini API 키 오류: ${errorMessage}\n\n` +
+            `API 키를 확인하고 다시 시도해주세요.`
+        );
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Gemini 응답에서 텍스트 추출
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      const text = data.candidates[0].content.parts[0].text;
+      const finishReason = data.candidates[0].finishReason;
+
+      // 응답이 완전히 생성되었는지 확인
+      if (finishReason === "MAX_TOKENS") {
+        console.warn(
+          "⚠️ 응답이 토큰 제한으로 인해 잘렸을 수 있습니다. maxOutputTokens를 늘려보세요."
+        );
+        // 완전하지 않더라도 받은 내용 반환 (재시도 없이)
+        return text;
+      }
+
+      if (
+        finishReason &&
+        finishReason !== "STOP" &&
+        finishReason !== "MAX_TOKENS"
+      ) {
+        console.warn(`⚠️ 응답 완료 이유: ${finishReason}`);
+        if (data.candidates[0].finishMessage) {
+          console.warn(`완료 메시지: ${data.candidates[0].finishMessage}`);
+        }
+      }
+
+      return text;
+    }
+
+    throw new Error("응답에서 원고를 찾을 수 없습니다.");
+  } catch (error) {
+    console.error("Gemini API 요청 실패:", error);
+    throw error;
+  }
 }

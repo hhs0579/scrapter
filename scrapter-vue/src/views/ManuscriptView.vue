@@ -394,9 +394,11 @@ const generateManuscript = async () => {
   questionStore.setGeneratedManuscript("");
 
   try {
+    const extractedText = questionStore.getUploadedDocumentText();
     const manuscript = await generateCompanyIntroduction(
       answers.value,
-      questionStore.selectedCard || 1
+      questionStore.selectedCard || 1,
+      extractedText
     );
     questionStore.setGeneratedManuscript(manuscript);
   } catch (error) {

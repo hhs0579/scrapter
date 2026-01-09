@@ -306,3 +306,4 @@ import CommonFooter from "../components/CommonFooter.vue";
   }
 }
 </style>
+

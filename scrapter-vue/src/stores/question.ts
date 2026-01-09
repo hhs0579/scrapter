@@ -413,6 +413,17 @@ export const useQuestionStore = defineStore("question", () => {
     return generatedManuscript.value;
   }
 
+  // 업로드된 문서에서 추출된 텍스트 저장
+  const uploadedDocumentText = ref<string>("");
+
+  function setUploadedDocumentText(text: string) {
+    uploadedDocumentText.value = text;
+  }
+
+  function getUploadedDocumentText(): string {
+    return uploadedDocumentText.value;
+  }
+
   function reset() {
     selectedCard.value = null;
     selectedBusinessTypes.value = [];
@@ -420,6 +431,7 @@ export const useQuestionStore = defineStore("question", () => {
     currentStep.value = 1;
     answers.value = {};
     generatedManuscript.value = "";
+    uploadedDocumentText.value = "";
   }
 
   return {
@@ -431,6 +443,7 @@ export const useQuestionStore = defineStore("question", () => {
     cardQuestions,
     answers,
     generatedManuscript,
+    uploadedDocumentText,
     setSelectedCard,
     toggleBusinessType,
     setCustomBusinessType,
@@ -439,6 +452,8 @@ export const useQuestionStore = defineStore("question", () => {
     getAnswer,
     setGeneratedManuscript,
     getGeneratedManuscript,
+    setUploadedDocumentText,
+    getUploadedDocumentText,
     reset,
   };
 });

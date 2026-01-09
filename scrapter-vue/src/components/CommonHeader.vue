@@ -307,17 +307,28 @@ onUnmounted(() => {
 }
 
 .nav-item {
-  padding: 0 16px;
+  padding: 0 12px;
   text-decoration: none;
-  color: var(--text-color, black);
+  color: #444659;
   font-weight: 500;
-  font-size: 16px;
+  font-size: 18px;
   cursor: pointer;
-  transition: color 0.6s ease;
+  transition: color 0.3s ease, font-weight 0.3s ease;
 }
 
 .nav-item:hover {
   color: #f59e61;
+}
+
+.nav-item.router-link-active,
+.nav-item.router-link-exact-active {
+  color: var(--text-color, black);
+  font-weight: bold;
+}
+
+.nav-item.router-link-active:hover,
+.nav-item.router-link-exact-active:hover {
+  color: var(--text-color, black);
 }
 
 .header-nav-mobile {
@@ -419,8 +430,13 @@ onUnmounted(() => {
   }
 
   .nav-item {
-    font-size: 14px;
+    font-size: 16px;
     padding: 0 12px;
+  }
+
+  .nav-item.router-link-active,
+  .nav-item.router-link-exact-active {
+    font-weight: bold;
   }
 }
 
@@ -452,5 +468,14 @@ onUnmounted(() => {
   .icon-button .material-icons {
     font-size: 16px;
   }
+}
+</style>
+
+<!-- 다크 모드 전역 스타일 -->
+<style>
+.dark
+  .common-header
+  .nav-item:not(.router-link-active):not(.router-link-exact-active) {
+  color: var(--muted-text, #bdbdbd);
 }
 </style>

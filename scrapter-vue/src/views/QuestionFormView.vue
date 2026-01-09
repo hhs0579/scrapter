@@ -71,8 +71,12 @@
         "
         class="pdf-upload-section"
       >
-        <button class="pdf-upload-button" @click="triggerFileUpload">
-          PDF 업로드
+        <button
+          class="pdf-upload-button"
+          @click="triggerFileUpload"
+          :disabled="isExtractingText"
+        >
+          {{ isExtractingText ? "텍스트 추출 중..." : "PDF 업로드" }}
         </button>
         <input
           ref="fileInput"
@@ -122,6 +126,7 @@ const fileInput = ref<HTMLInputElement | null>(null);
 const uploadedFiles = ref<File[]>([]);
 const answers = ref<Record<number, string>>({});
 const isFocused = ref<Record<number, boolean>>({});
+const isExtractingText = ref(false);
 
 // 선택한 카드가 없으면 QuestionView로 리다이렉트
 onMounted(() => {
@@ -181,11 +186,12 @@ const triggerFileUpload = () => {
   fileInput.value?.click();
 };
 
-const handleFileUpload = (event: Event) => {
+const handleFileUpload = async (event: Event) => {
   const target = event.target as HTMLInputElement;
   if (target.files) {
     const newFiles = Array.from(target.files);
     // 기존 파일에 새 파일 추가 (중복 제거)
+    const filesToAdd: File[] = [];
     newFiles.forEach((newFile) => {
       const isDuplicate = uploadedFiles.value.some(
         (existingFile) =>
@@ -194,15 +200,66 @@ const handleFileUpload = (event: Event) => {
       );
       if (!isDuplicate) {
         uploadedFiles.value.push(newFile);
+        filesToAdd.push(newFile);
       }
     });
+
+    // 새로 추가된 파일에서 텍스트 추출
+    if (filesToAdd.length > 0) {
+      isExtractingText.value = true;
+      try {
+        // 동적 import로 파일 추출 모듈 로드 (에러 발생해도 앱이 멈추지 않도록)
+        import("../utils/fileExtractor")
+          .then((module) => {
+            return module.extractTextFromFiles(filesToAdd);
+          })
+          .then((extractedText) => {
+            if (extractedText && extractedText.trim()) {
+              // 기존 추출된 텍스트에 새 텍스트 추가
+              const existingText = questionStore.getUploadedDocumentText();
+              const combinedText = existingText
+                ? `${existingText}\n\n---\n\n${extractedText}`
+                : extractedText;
+              questionStore.setUploadedDocumentText(combinedText);
+            }
+          })
+          .catch((error) => {
+            console.error("텍스트 추출 오류:", error);
+            // 에러 발생해도 앱은 계속 작동
+          })
+          .finally(() => {
+            isExtractingText.value = false;
+          });
+      } catch (error) {
+        console.error("텍스트 추출 초기화 오류:", error);
+        isExtractingText.value = false;
+      }
+    }
+
     // input 초기화 (같은 파일 다시 선택 가능하도록)
     target.value = "";
   }
 };
 
-const removeFile = (index: number) => {
+const removeFile = async (index: number) => {
   uploadedFiles.value.splice(index, 1);
+
+  // 파일 삭제 시 남은 파일들에서 텍스트 재추출
+  if (uploadedFiles.value.length > 0) {
+    try {
+      const module = await import("../utils/fileExtractor");
+      const extractedText = await module.extractTextFromFiles(
+        uploadedFiles.value
+      );
+      questionStore.setUploadedDocumentText(extractedText);
+    } catch (error) {
+      console.error("텍스트 재추출 오류:", error);
+      // 에러 발생해도 앱은 계속 작동
+    }
+  } else {
+    // 모든 파일이 삭제된 경우 텍스트도 초기화
+    questionStore.setUploadedDocumentText("");
+  }
 };
 
 const goBack = () => {

@@ -99,7 +99,34 @@
               :class="{ highlighted: manuscript.isHighlighted }"
             >
               <div class="manuscript-info">
-                <h3 class="manuscript-title">{{ manuscript.title }}</h3>
+                <div class="title-container">
+                  <button
+                    @click="startEditTitle(manuscript.id, manuscript.title)"
+                    @mousedown.prevent
+                    class="edit-title-button"
+                    :title="editingTitleId === manuscript.id ? '취소' : '제목 수정'"
+                  >
+                    <span class="material-icons">{{
+                      editingTitleId === manuscript.id ? "close" : "edit"
+                    }}</span>
+                  </button>
+                  <h3 
+                    v-if="editingTitleId !== manuscript.id"
+                    class="manuscript-title"
+                  >
+                    {{ manuscript.title }}
+                  </h3>
+                  <input
+                    v-else
+                    v-model="editingTitle"
+                    @keyup.enter="saveTitle(manuscript.id)"
+                    @keyup.esc="cancelEditTitle"
+                    @blur="handleBlur(manuscript.id)"
+                    class="title-input"
+                    :ref="el => { if (el) titleInputRef = el as HTMLInputElement }"
+                    type="text"
+                  />
+                </div>
                 <p class="manuscript-meta">
                   {{ formatDate(manuscript.createdAt) }} / {{ manuscript.type }}
                 </p>
@@ -151,7 +178,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { auth, db } from "../config/firebase";
 import { signOut } from "firebase/auth";
@@ -162,6 +189,7 @@ import {
   getDocs,
   doc,
   getDoc,
+  updateDoc,
 } from "firebase/firestore";
 import CommonHeader from "../components/CommonHeader.vue";
 import CommonFooter from "../components/CommonFooter.vue";
@@ -182,6 +210,10 @@ const manuscripts = ref<Manuscript[]>([]);
 const isLoading = ref(false);
 const userNickname = ref<string>("");
 const userPhotoURL = ref<string>("");
+const editingTitleId = ref<string | null>(null);
+const editingTitle = ref<string>("");
+const titleInputRef = ref<HTMLInputElement | null>(null);
+const isCancelling = ref(false);
 
 onMounted(async () => {
   // 로그인 확인
@@ -295,6 +327,81 @@ const editManuscript = (id: string) => {
   sessionStorage.setItem("editingManuscriptId", id);
   sessionStorage.removeItem("viewingManuscriptId");
   router.push("/manuscript");
+};
+
+const startEditTitle = async (id: string, currentTitle: string) => {
+  if (editingTitleId.value === id) {
+    // 이미 편집 중이면 취소
+    isCancelling.value = true;
+    cancelEditTitle();
+    // 취소 후 다시 편집 모드로 들어가지 않도록 약간의 지연
+    setTimeout(() => {
+      isCancelling.value = false;
+    }, 100);
+    return;
+  }
+  
+  editingTitleId.value = id;
+  editingTitle.value = currentTitle;
+  isCancelling.value = false;
+  
+  // 다음 틱에서 input에 포커스
+  await nextTick();
+  if (titleInputRef.value) {
+    titleInputRef.value.focus();
+    titleInputRef.value.select();
+  }
+};
+
+const cancelEditTitle = () => {
+  editingTitleId.value = null;
+  editingTitle.value = "";
+};
+
+const handleBlur = (id: string) => {
+  // 취소 중이면 blur 이벤트 무시
+  if (isCancelling.value) {
+    return;
+  }
+  
+  // 약간의 지연을 주어 클릭 이벤트가 먼저 처리되도록 함
+  setTimeout(() => {
+    // 취소 버튼이 클릭되었거나 편집 모드가 아니면 저장하지 않음
+    if (!isCancelling.value && editingTitleId.value === id) {
+      saveTitle(id);
+    }
+  }, 150);
+};
+
+const saveTitle = async (id: string) => {
+  if (!db || !editingTitleId.value || editingTitleId.value !== id) return;
+  
+  const newTitle = editingTitle.value.trim();
+  
+  // 제목이 비어있거나 변경사항이 없으면 취소
+  if (!newTitle || newTitle === manuscripts.value.find(m => m.id === id)?.title) {
+    cancelEditTitle();
+    return;
+  }
+  
+  try {
+    const manuscriptRef = doc(db, "manuscripts", id);
+    await updateDoc(manuscriptRef, {
+      title: newTitle,
+    });
+    
+    // 로컬 상태 업데이트
+    const manuscript = manuscripts.value.find(m => m.id === id);
+    if (manuscript) {
+      manuscript.title = newTitle;
+    }
+    
+    cancelEditTitle();
+  } catch (error) {
+    console.error("제목 수정 오류:", error);
+    alert("제목 수정 중 오류가 발생했습니다.");
+    cancelEditTitle();
+  }
 };
 
 const handleLogout = async () => {
@@ -568,11 +675,58 @@ const handleLogout = async () => {
   min-width: 0;
 }
 
+.title-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .manuscript-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-strong);
-  margin: 0 0 8px 0;
+  margin: 0;
+  flex: 1;
+}
+
+.title-input {
+  flex: 1;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  background-color: transparent;
+  border: 2px solid var(--primary-color);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+  font-family: inherit;
+}
+
+.edit-title-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-text);
+  transition: color 0.2s;
+  opacity: 0.7;
+}
+
+.edit-title-button:hover {
+  color: var(--primary-color);
+  opacity: 1;
+}
+
+.edit-title-button .material-icons {
+  font-size: 18px;
+}
+
+.title-container:hover .edit-title-button {
+  opacity: 1;
 }
 
 .manuscript-meta {
