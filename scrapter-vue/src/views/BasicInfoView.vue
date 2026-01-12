@@ -176,8 +176,9 @@ const checkNickname = async () => {
     nicknameChecked.value = true;
   } catch (err: any) {
     console.error("닉네임 확인 오류:", err);
-    error.value = "닉네임 확인 중 오류가 발생했습니다.";
+    error.value = "닉네임 확인 중 오류가 발생했습니다: " + (err.message || err);
     nicknameChecked.value = true;
+    nicknameAvailable.value = false;
   } finally {
     isCheckingNickname.value = false;
   }

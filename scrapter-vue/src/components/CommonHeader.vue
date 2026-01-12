@@ -36,8 +36,12 @@
     <div class="header-nav" v-if="isDesktop">
       <div class="nav-content">
         <router-link to="/" class="nav-item">홈</router-link>
-        <router-link to="/user-guide" class="nav-item">사용가이드</router-link>
         <router-link to="/dashboard" class="nav-item">대시보드</router-link>
+        <router-link to="/insights" class="nav-item">인사이트</router-link>
+        <router-link to="/business-finder" class="nav-item"
+          >비즈니스 파인더</router-link
+        >
+        <router-link to="/user-guide" class="nav-item">사용가이드</router-link>
       </div>
     </div>
     <div class="header-nav-mobile" v-else>
@@ -49,11 +53,17 @@
           <router-link to="/" class="nav-item" @click="closeMenu"
             >홈</router-link
           >
-          <router-link to="/user-guide" class="nav-item" @click="closeMenu"
-            >사용가이드</router-link
-          >
           <router-link to="/dashboard" class="nav-item" @click="closeMenu"
             >대시보드</router-link
+          >
+          <router-link to="/insights" class="nav-item" @click="closeMenu"
+            >인사이트</router-link
+          >
+          <router-link to="/business-finder" class="nav-item" @click="closeMenu"
+            >비즈니스 파인더</router-link
+          >
+          <router-link to="/user-guide" class="nav-item" @click="closeMenu"
+            >사용가이드</router-link
           >
         </div>
       </div>
@@ -96,8 +106,12 @@ const handleLogoError = (e: Event) => {
   const img = e.target as HTMLImageElement;
   img.style.display = "none";
   if (img.parentElement) {
-    img.parentElement.innerHTML =
-      '<span style="font-weight: bold; font-size: 20px;">Scrapter</span>';
+    // innerHTML 대신 textContent 사용하여 XSS 방지
+    const span = document.createElement("span");
+    span.style.fontWeight = "bold";
+    span.style.fontSize = "20px";
+    span.textContent = "Scrapter";
+    img.parentElement.appendChild(span);
   }
 };
 
@@ -237,7 +251,7 @@ onUnmounted(() => {
 }
 
 .logo-image {
-  height: 40px;
+  height: 32px;
   width: auto;
   object-fit: contain;
   image-rendering: -webkit-optimize-contrast;
@@ -262,7 +276,7 @@ onUnmounted(() => {
 
 .contact-button {
   padding: 10px 16px;
-  background-color: #f59e61;
+  background-color: var(--primary-color);
   color: white;
   border: none;
   border-radius: 6px;
@@ -273,7 +287,7 @@ onUnmounted(() => {
 }
 
 .contact-button:hover {
-  background-color: #e88d4f;
+  background-color: #f59e61;
 }
 
 .icon-button {
@@ -300,10 +314,10 @@ onUnmounted(() => {
 }
 
 .nav-content {
-  margin: 0 auto;
+  margin: 10px auto;
   padding: 0 10%;
   display: flex;
-  gap: 32px;
+  gap: 12px;
 }
 
 .nav-item {

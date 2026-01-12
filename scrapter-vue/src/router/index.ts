@@ -11,6 +11,13 @@ import TermsAgreementView from "../views/TermsAgreementView.vue";
 import BasicInfoView from "../views/BasicInfoView.vue";
 import LoginView from "../views/LoginView.vue";
 import DashboardView from "../views/DashboardView.vue";
+import InsightsView from "../views/InsightsView.vue";
+import InsightDetailView from "../views/InsightDetailView.vue";
+import BusinessFinderView from "../views/BusinessFinderView.vue";
+import BusinessFinderDetailView from "../views/BusinessFinderDetailView.vue";
+import AdminLoginView from "../views/AdminLoginView.vue";
+import AdminView from "../views/AdminView.vue";
+import AdminBusinessFinderView from "../views/AdminBusinessFinderView.vue";
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,6 +81,51 @@ const router = createRouter({
       path: "/dashboard",
       name: "dashboard",
       component: DashboardView,
+    },
+    {
+      path: "/dashboard/manuscripts",
+      name: "dashboard-manuscripts",
+      component: DashboardView,
+    },
+    {
+      path: "/dashboard/my-insights",
+      name: "dashboard-my-insights",
+      component: DashboardView,
+    },
+    {
+      path: "/insights",
+      name: "insights",
+      component: InsightsView,
+    },
+    {
+      path: "/insights/:id",
+      name: "insight-detail",
+      component: InsightDetailView,
+    },
+    {
+      path: "/business-finder",
+      name: "business-finder",
+      component: BusinessFinderView,
+    },
+    {
+      path: "/business-finder/:id",
+      name: "business-finder-detail",
+      component: BusinessFinderDetailView,
+    },
+    {
+      path: "/admin/login",
+      name: "admin-login",
+      component: AdminLoginView,
+    },
+    {
+      path: "/admin",
+      name: "admin",
+      component: AdminView,
+    },
+    {
+      path: "/admin/business-finder",
+      name: "admin-business-finder",
+      component: AdminBusinessFinderView,
     },
   ],
 });

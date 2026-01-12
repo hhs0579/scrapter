@@ -95,7 +95,7 @@
             <div
               v-if="generatedManuscript"
               class="manuscript-text"
-              v-html="formattedManuscript"
+              v-html="sanitizedManuscript"
             ></div>
             <p v-else class="preview-placeholder">
               원고가 생성되면 여기에 표시됩니다.
@@ -124,6 +124,7 @@ import {
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from "docx";
+import DOMPurify from "dompurify";
 import CommonHeader from "../components/CommonHeader.vue";
 import CommonFooter from "../components/CommonFooter.vue";
 
@@ -238,6 +239,23 @@ const formattedManuscript = computed(() => {
   }
 
   return result;
+});
+
+// XSS 방지를 위한 HTML Sanitization
+const sanitizedManuscript = computed(() => {
+  if (!formattedManuscript.value) return "";
+  return DOMPurify.sanitize(formattedManuscript.value, {
+    ALLOWED_TAGS: [
+      "p",
+      "br",
+      "strong",
+      "em",
+      "u",
+      "div",
+      "span",
+    ],
+    ALLOWED_ATTR: ["class", "style"],
+  });
 });
 
 // 저장된 원고 로드
@@ -495,10 +513,11 @@ const getPlainTextManuscript = (): string => {
   text = text.replace(/#\s*/g, "");
   text = text.replace(/\*\s+/g, "");
 
-  // HTML 태그가 있다면 제거 (formattedManuscript에서)
+  // HTML 태그가 있다면 제거 (sanitizedManuscript에서)
   const tempDiv = document.createElement("div");
-  tempDiv.innerHTML = formattedManuscript.value;
-  text = tempDiv.textContent || tempDiv.innerText || text;
+  // textContent만 사용하여 안전하게 텍스트 추출
+  tempDiv.textContent = formattedManuscript.value;
+  text = tempDiv.textContent || text;
 
   return text.trim();
 };

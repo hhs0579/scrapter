@@ -44,6 +44,14 @@
               <span>나의 원고함</span>
             </router-link>
             <router-link
+              to="/dashboard/my-insights"
+              class="nav-item"
+              active-class="active"
+            >
+              <span class="material-icons">favorite</span>
+              <span>나의 인사이트</span>
+            </router-link>
+            <router-link
               to="/dashboard/records"
               class="nav-item"
               active-class="active"
@@ -77,21 +85,70 @@
 
         <!-- 오른쪽 메인 콘텐츠 -->
         <div class="dashboard-main">
-          <h1 class="page-title">나의 원고함</h1>
+          <!-- 나의 인사이트 뷰 -->
+          <div v-if="currentView === 'my-insights'">
+            <h1 class="page-title">나의 인사이트</h1>
 
-          <div v-if="isLoading" class="loading-state">
-            <div class="loading-spinner"></div>
-            <p>로딩 중...</p>
+            <div v-if="isLoadingInsights" class="loading-state">
+              <div class="loading-spinner"></div>
+              <p>로딩 중...</p>
+            </div>
+
+            <div v-else-if="likedInsights.length === 0" class="empty-state">
+              <p>좋아요한 인사이트가 없습니다.</p>
+              <router-link to="/insights" class="new-manuscript-button">
+                인사이트 보러가기
+              </router-link>
+            </div>
+
+            <div v-else class="insights-grid">
+              <div
+                v-for="insight in likedInsights"
+                :key="insight.id"
+                class="insight-card"
+                @click="viewInsight(insight.id)"
+              >
+                <div class="card-image-container">
+                  <img
+                    v-if="insight.imageUrl"
+                    :src="insight.imageUrl"
+                    :alt="insight.title"
+                    class="card-image"
+                    @error="handleImageError"
+                  />
+                  <div v-else class="card-image-placeholder">
+                    <span class="material-icons">article</span>
+                  </div>
+                </div>
+                <div class="card-content">
+                  <span class="card-category">{{ insight.category }}</span>
+                  <h3 class="card-title">{{ insight.title }}</h3>
+                  <p class="card-snippet">{{ insight.snippet }}</p>
+                  <p v-if="insight.source" class="card-source">
+                    {{ insight.source }}
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div v-else-if="manuscripts.length === 0" class="empty-state">
-            <p>저장된 원고가 없습니다.</p>
-            <button class="new-manuscript-button" @click="goToApp">
-              새 원고 만들기
-            </button>
-          </div>
+          <!-- 나의 원고함 뷰 -->
+          <div v-else>
+            <h1 class="page-title">나의 원고함</h1>
 
-          <div v-else class="manuscripts-list">
+            <div v-if="isLoading" class="loading-state">
+              <div class="loading-spinner"></div>
+              <p>로딩 중...</p>
+            </div>
+
+            <div v-else-if="manuscripts.length === 0" class="empty-state">
+              <p>저장된 원고가 없습니다.</p>
+              <button class="new-manuscript-button" @click="goToApp">
+                새 원고 만들기
+              </button>
+            </div>
+
+            <div v-else class="manuscripts-list">
             <div
               v-for="manuscript in manuscripts"
               :key="manuscript.id"
@@ -163,12 +220,20 @@
                   >
                     수정하기
                   </button>
+                  <button
+                    class="delete-button"
+                    @click="deleteManuscript(manuscript.id)"
+                    :disabled="isDeleting === manuscript.id"
+                  >
+                    {{ isDeleting === manuscript.id ? "삭제 중..." : "삭제" }}
+                  </button>
                 </template>
                 <button v-else class="expired-button" disabled>
                   기간 만료
                 </button>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </div>
@@ -178,8 +243,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { ref, onMounted, nextTick, computed, watch } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { auth, db } from "../config/firebase";
 import { signOut } from "firebase/auth";
 import {
@@ -190,6 +255,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  deleteDoc,
 } from "firebase/firestore";
 import CommonHeader from "../components/CommonHeader.vue";
 import CommonFooter from "../components/CommonFooter.vue";
@@ -206,6 +272,7 @@ interface Manuscript {
 }
 
 const router = useRouter();
+const route = useRoute();
 const manuscripts = ref<Manuscript[]>([]);
 const isLoading = ref(false);
 const userNickname = ref<string>("");
@@ -214,6 +281,31 @@ const editingTitleId = ref<string | null>(null);
 const editingTitle = ref<string>("");
 const titleInputRef = ref<HTMLInputElement | null>(null);
 const isCancelling = ref(false);
+const isDeleting = ref<string | null>(null);
+
+// 나의 인사이트 관련
+const likedInsights = ref<Insight[]>([]);
+const isLoadingInsights = ref(false);
+
+interface Insight {
+  id: string;
+  title: string;
+  category: string;
+  snippet: string;
+  source?: string;
+  imageUrl?: string;
+  content?: string;
+  createdAt: Date;
+}
+
+const currentView = computed(() => {
+  const path = route.path;
+  if (path.includes("/my-insights")) {
+    return "my-insights";
+  }
+  // /dashboard 또는 /dashboard/manuscripts 모두 원고함 뷰
+  return "manuscripts";
+});
 
 onMounted(async () => {
   // 로그인 확인
@@ -223,8 +315,24 @@ onMounted(async () => {
   }
 
   await loadUserInfo();
-  await loadManuscripts();
+  if (currentView.value === "my-insights") {
+    await loadLikedInsights();
+  } else {
+    await loadManuscripts();
+  }
 });
+
+// 라우트 변경 감지
+watch(
+  () => route.path,
+  async (newPath) => {
+    if (newPath.includes("/my-insights")) {
+      await loadLikedInsights();
+    } else if (newPath.includes("/dashboard")) {
+      await loadManuscripts();
+    }
+  }
+);
 
 const loadUserInfo = async () => {
   if (!auth?.currentUser || !db) return;
@@ -401,6 +509,124 @@ const saveTitle = async (id: string) => {
     console.error("제목 수정 오류:", error);
     alert("제목 수정 중 오류가 발생했습니다.");
     cancelEditTitle();
+  }
+};
+
+const loadLikedInsights = async () => {
+  if (!auth?.currentUser || !db) {
+    isLoadingInsights.value = false;
+    return;
+  }
+
+  isLoadingInsights.value = true;
+
+  try {
+    // 사용자의 좋아요한 인사이트 ID 목록 가져오기
+    const userDocRef = doc(db, "users", auth.currentUser.uid);
+    const userDoc = await getDoc(userDocRef);
+    
+    if (!userDoc.exists()) {
+      likedInsights.value = [];
+      return;
+    }
+
+    const userData = userDoc.data();
+    const likedIds = userData.likedInsights || [];
+
+    if (likedIds.length === 0) {
+      likedInsights.value = [];
+      return;
+    }
+
+    // 좋아요한 인사이트들 가져오기
+    const insightsRef = collection(db, "insights");
+    const allInsights = await getDocs(insightsRef);
+    
+    const insightsMap = new Map<string, Insight>();
+    allInsights.docs.forEach((doc) => {
+      const data = doc.data();
+      insightsMap.set(doc.id, {
+        id: doc.id,
+        title: data.title || "",
+        category: data.category || "",
+        snippet: data.snippet || "",
+        source: data.source || "",
+        imageUrl: data.imageUrl || "",
+        content: data.content || "",
+        createdAt: data.createdAt?.toDate() || new Date(),
+      });
+    });
+
+    // 좋아요한 ID 순서대로 인사이트 배열 생성
+    likedInsights.value = likedIds
+      .map((id: string) => insightsMap.get(id))
+      .filter((insight: Insight | undefined): insight is Insight => insight !== undefined)
+      .sort((a: Insight, b: Insight) => b.createdAt.getTime() - a.createdAt.getTime());
+  } catch (error) {
+    console.error("좋아요한 인사이트 로드 오류:", error);
+  } finally {
+    isLoadingInsights.value = false;
+  }
+};
+
+// 제목을 슬러그로 변환하는 함수
+const createSlug = (title: string, id: string): string => {
+  let slug = title
+    .toLowerCase()
+    .replace(/[^\w\s-가-힣]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+  
+  if (slug.length > 50) {
+    slug = slug.substring(0, 50);
+  }
+  
+  if (!slug) {
+    return id;
+  }
+  
+  return `${slug}-${id}`;
+};
+
+const viewInsight = (insightId: string) => {
+  // 인사이트 정보 찾기
+  const insight = likedInsights.value.find((i) => i.id === insightId);
+  if (insight) {
+    const slug = createSlug(insight.title, insight.id);
+    router.push(`/insights/${slug}`);
+  } else {
+    // 찾지 못하면 ID로 직접 이동
+    router.push(`/insights/${insightId}`);
+  }
+};
+
+const handleImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement;
+  img.style.display = "none";
+  if (img.parentElement) {
+    const placeholder = img.parentElement.querySelector(
+      ".card-image-placeholder"
+    );
+    if (placeholder) {
+      (placeholder as HTMLElement).style.display = "flex";
+    }
+  }
+};
+
+const deleteManuscript = async (id: string) => {
+  if (!db) return;
+  if (!confirm("정말 이 원고를 삭제하시겠습니까?")) return;
+
+  isDeleting.value = id;
+  try {
+    await deleteDoc(doc(db, "manuscripts", id));
+    await loadManuscripts();
+  } catch (error) {
+    console.error("원고 삭제 오류:", error);
+    alert("삭제 중 오류가 발생했습니다.");
+  } finally {
+    isDeleting.value = null;
   }
 };
 
@@ -803,6 +1029,27 @@ const handleLogout = async () => {
   background-color: var(--primary-soft-bg);
 }
 
+.delete-button {
+  padding: 10px 20px;
+  background-color: var(--surface-bg);
+  color: #e74c3c;
+  border: 1px solid #e74c3c;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-button:hover:not(:disabled) {
+  background-color: rgba(231, 76, 60, 0.1);
+}
+
+.delete-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .expired-button {
   padding: 10px 20px;
   background-color: var(--border-color);
@@ -813,5 +1060,114 @@ const handleLogout = async () => {
   font-weight: 500;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* 나의 인사이트 스타일 */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+
+.insight-card {
+  background-color: var(--surface-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+}
+
+.insight-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+}
+
+.card-image-container {
+  position: relative;
+  width: 100%;
+  height: 200px;
+  overflow: hidden;
+  background-color: var(--secondary-bg);
+}
+
+.card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-image-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.card-image-placeholder .material-icons {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.card-content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.card-category {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--primary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-strong);
+  margin: 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-snippet {
+  font-size: 14px;
+  color: var(--text-color);
+  margin: 0;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.card-source {
+  font-size: 12px;
+  color: var(--muted-text);
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .insights-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

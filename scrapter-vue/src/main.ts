@@ -29,7 +29,12 @@ console.log('App Element:', appElement)
 
 if (!appElement) {
   console.error('❌ #app 요소를 찾을 수 없습니다!')
-  document.body.innerHTML = '<div style="padding: 20px; color: red;">#app 요소를 찾을 수 없습니다!</div>'
+  // innerHTML 대신 DOM API 사용하여 XSS 방지
+  const errorDiv = document.createElement('div');
+  errorDiv.style.padding = '20px';
+  errorDiv.style.color = 'red';
+  errorDiv.textContent = '#app 요소를 찾을 수 없습니다!';
+  document.body.appendChild(errorDiv);
 } else {
   try {
     app.mount('#app')

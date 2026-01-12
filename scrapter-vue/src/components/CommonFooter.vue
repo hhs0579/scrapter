@@ -42,8 +42,13 @@ const handleLogoError = (e: Event) => {
   const img = e.target as HTMLImageElement;
   img.style.display = "none";
   if (img.parentElement) {
-    img.parentElement.innerHTML =
-      '<span style="font-weight: bold; font-size: 20px; color: white;">Scrapter</span>';
+    // innerHTML 대신 textContent 사용하여 XSS 방지
+    const span = document.createElement("span");
+    span.style.fontWeight = "bold";
+    span.style.fontSize = "20px";
+    span.style.color = "white";
+    span.textContent = "Scrapter";
+    img.parentElement.appendChild(span);
   }
 };
 

@@ -12,7 +12,7 @@
       </div>
       <div v-else-if="generationError" class="error-state">
         <p class="error-message">{{ generationError }}</p>
-        <button class="retry-button" @click="generateManuscript">
+        <button class="retry-button" @click="goBack">
           다시 시도
         </button>
       </div>
@@ -35,6 +35,8 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useQuestionStore } from "../stores/question";
 import { generateCompanyIntroduction } from "../services/geminiApi";
+import { auth, db } from "../config/firebase";
+import { doc, setDoc, serverTimestamp, Timestamp } from "firebase/firestore";
 import CommonHeader from "../components/CommonHeader.vue";
 import CommonFooter from "../components/CommonFooter.vue";
 
@@ -118,8 +120,60 @@ const generateManuscript = async () => {
   }
 };
 
-const goToManuscript = () => {
+const goToManuscript = async () => {
+  // 원고 자동 저장
+  if (auth?.currentUser && db && questionStore.getGeneratedManuscript()) {
+    try {
+      const cardTitles: Record<number, string> = {
+        1: "회사소개서",
+        2: "IR / 사업계획서",
+        3: "제품·서비스 소개서",
+        4: "상세페이지 / 마케팅 콘텐츠",
+      };
+
+      const cardNumber = questionStore.selectedCard;
+      if (!cardNumber) {
+        router.push("/manuscript");
+        return;
+      }
+
+      const title = cardTitles[cardNumber] || "원고";
+      const type = cardTitles[cardNumber] || "원고";
+
+      // 유효기간: 생성일로부터 3년
+      const validUntil = new Date();
+      validUntil.setFullYear(validUntil.getFullYear() + 3);
+
+      const answers = getAllAnswers();
+
+      const manuscriptData = {
+        userId: auth.currentUser.uid,
+        title: `${title} 제작`,
+        type: type,
+        status: "complete",
+        answers: answers,
+        manuscript: questionStore.getGeneratedManuscript(),
+        selectedCard: questionStore.selectedCard,
+        createdAt: serverTimestamp(),
+        validUntil: Timestamp.fromDate(validUntil),
+      };
+
+      // 새 문서 생성
+      await setDoc(
+        doc(db, "manuscripts", `${Date.now()}_${auth.currentUser.uid}`),
+        manuscriptData
+      );
+    } catch (error) {
+      console.error("원고 자동 저장 오류:", error);
+      // 저장 실패해도 원고 페이지로 이동
+    }
+  }
+
   router.push("/manuscript");
+};
+
+const goBack = () => {
+  router.push("/question-form");
 };
 
 // 페이지 로드 시 자동으로 원고 생성

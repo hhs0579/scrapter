@@ -33,18 +33,8 @@ async function getGeminiApiKey(forceRefresh: boolean = false): Promise<string> {
       return envApiKey;
     }
 
-    // 코드에 직접 설정된 API 키 확인 (우선순위 2 - 개발용)
-    // ⚠️ 주의: 프로덕션에서는 환경 변수 사용을 권장합니다
-    const directApiKey = "AIzaSyB8mkSz_j7gpv7_xYwANn5LLt6nMCeFAXc";
-    if (directApiKey && directApiKey.trim() !== "") {
-      console.log("✅ 코드에서 직접 설정된 API 키 사용");
-      console.log(
-        "🔑 API 키 (처음 10자):",
-        directApiKey.substring(0, 10) + "..."
-      );
-      cachedApiKey = directApiKey;
-      return directApiKey;
-    }
+    // 코드에 직접 설정된 API 키는 보안상 제거되었습니다.
+    // ⚠️ 환경 변수 또는 Firestore를 사용하세요.
 
     // Firestore에서 API 키 읽기 (우선순위 3 - 선택사항)
     if (db) {
@@ -625,6 +615,23 @@ ${prompt}
         throw new Error(quotaErrorMessage);
       }
 
+      // API 키 유출 오류 처리
+      if (
+        errorMessage.includes("leaked") ||
+        errorMessage.includes("reported as leaked")
+      ) {
+        // API 키 캐시 초기화
+        cachedApiKey = null;
+        throw new Error(
+          `⚠️ API 키가 유출되어 사용할 수 없습니다.\n\n` +
+            `해결 방법:\n` +
+            `1. Google AI Studio (https://aistudio.google.com/app/apikey)에서 새로운 API 키 생성\n` +
+            `2. Firebase 콘솔에서 Firestore의 'config/geminiApiKey' 문서에 새 키 저장\n` +
+            `   또는 .env 파일에 VITE_GEMINI_API_KEY 설정\n` +
+            `3. 유출된 키는 Google AI Studio에서 삭제하세요.`
+        );
+      }
+
       // API 키 관련 에러인 경우 명확한 메시지 제공
       if (
         errorMessage.includes("API key") ||
@@ -637,7 +644,11 @@ ${prompt}
         cachedApiKey = null;
         throw new Error(
           `Gemini API 키 오류: ${errorMessage}\n\n` +
-            `API 키를 확인하고 다시 시도해주세요.`
+            `API 키를 확인하고 다시 시도해주세요.\n\n` +
+            `해결 방법:\n` +
+            `1. Firebase 콘솔에서 Firestore의 'config/geminiApiKey' 문서 확인\n` +
+            `2. .env 파일에 VITE_GEMINI_API_KEY 설정 확인\n` +
+            `3. Google AI Studio에서 새로운 API 키 생성`
         );
       }
 
@@ -668,6 +679,23 @@ ${prompt}
         throw new Error(quotaErrorMessage);
       }
 
+      // API 키 유출 오류 처리
+      if (
+        errorMessage.includes("leaked") ||
+        errorMessage.includes("reported as leaked")
+      ) {
+        // API 키 캐시 초기화
+        cachedApiKey = null;
+        throw new Error(
+          `⚠️ API 키가 유출되어 사용할 수 없습니다.\n\n` +
+            `해결 방법:\n` +
+            `1. Google AI Studio (https://aistudio.google.com/app/apikey)에서 새로운 API 키 생성\n` +
+            `2. Firebase 콘솔에서 Firestore의 'config/geminiApiKey' 문서에 새 키 저장\n` +
+            `   또는 .env 파일에 VITE_GEMINI_API_KEY 설정\n` +
+            `3. 유출된 키는 Google AI Studio에서 삭제하세요.`
+        );
+      }
+
       // API 키 관련 에러인 경우 명확한 메시지 제공
       if (
         errorMessage.includes("API key") ||
@@ -679,7 +707,11 @@ ${prompt}
         cachedApiKey = null;
         throw new Error(
           `Gemini API 키 오류: ${errorMessage}\n\n` +
-            `API 키를 확인하고 다시 시도해주세요.`
+            `API 키를 확인하고 다시 시도해주세요.\n\n` +
+            `해결 방법:\n` +
+            `1. Firebase 콘솔에서 Firestore의 'config/geminiApiKey' 문서 확인\n` +
+            `2. .env 파일에 VITE_GEMINI_API_KEY 설정 확인\n` +
+            `3. Google AI Studio에서 새로운 API 키 생성`
         );
       }
       throw new Error(errorMessage);

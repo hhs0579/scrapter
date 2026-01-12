@@ -106,7 +106,13 @@
 
       <div class="form-buttons">
         <button class="btn-secondary" @click="goBack">이전으로</button>
-        <button class="btn-primary" @click="submitForm">제출하기</button>
+        <button 
+          class="btn-primary" 
+          @click="submitForm"
+          :disabled="!isAllQuestionsAnswered"
+        >
+          제출하기
+        </button>
       </div>
     </main>
     <CommonFooter />
@@ -169,6 +175,18 @@ const currentQuestions = computed(() => {
       questionStore.selectedCard as keyof typeof questionStore.cardQuestions
     ];
   return questions || [];
+});
+
+// 모든 질문에 답변이 있는지 확인
+const isAllQuestionsAnswered = computed(() => {
+  if (!currentQuestions.value || currentQuestions.value.length === 0) {
+    return false;
+  }
+  
+  return currentQuestions.value.every((q) => {
+    const answer = answers.value[q.number];
+    return answer && typeof answer === "string" && answer.trim().length > 0;
+  });
 });
 
 const updateAnswer = (questionNumber: number, event: Event) => {
@@ -378,7 +396,7 @@ const submitForm = () => {
 .hint-examples-label {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-color);
+  color: var(--muted-text);
   margin: 0 0 8px 0;
 }
 
@@ -402,7 +420,7 @@ const submitForm = () => {
   content: "•";
   position: absolute;
   left: 0;
-  color: var(--primary-color);
+  color: var(--muted-text);
   font-size: 12px;
 }
 
@@ -565,10 +583,16 @@ const submitForm = () => {
   transition: all 0.3s;
 }
 
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: #e88d4f;
-  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(255, 119, 0, 0.3);
+}
+
+.btn-primary:disabled {
+  background-color: var(--border-color);
+  color: var(--muted-text);
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 @media (max-width: 768px) {
